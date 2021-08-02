@@ -68,9 +68,13 @@ def run(args):
     print('==> Resuming from checkpoint..')
 
     ### load models
-    if args.arch_name=="resnet50v15":
+    if args.teacher_path:
+        load_model_pytorch(net, args.teacher_path, gpu_n=torch.cuda.current_device())
+
+    elif args.arch_name=="resnet50v15":
         path_to_model = "./models/resnet50v15/model_best.pth.tar"
         load_model_pytorch(net, path_to_model, gpu_n=torch.cuda.current_device())
+
 
     net.to(device)
     net.eval()
@@ -199,6 +203,7 @@ def main():
     parser.add_argument('--store_best_images', action='store_true', help='save best images as separate files')
 
     parser.add_argument('--initial_images_path', type=str, default="/content/drive/MyDrive/data/PascalVOC/JPEGImages/")
+    parser.add_argument('--teacher_path', type=str, default=None)
 
     args = parser.parse_args()
     print(args)
