@@ -10,10 +10,11 @@ from torch import distributed, nn
 import random
 import numpy as np
 
+
 def load_model_pytorch(model, load_model, gpu_n=0):
     print("=> loading checkpoint '{}'".format(load_model))
 
-    checkpoint = torch.load(load_model, map_location = lambda storage, loc: storage.cuda(gpu_n))
+    checkpoint = torch.load(load_model, map_location=lambda storage, loc: storage.cuda(gpu_n))
 
     if 'state_dict' in checkpoint.keys():
         load_from = checkpoint['state_dict']
@@ -34,12 +35,20 @@ def load_model_pytorch(model, load_model, gpu_n=0):
                 load_from = OrderedDict([(k.replace("module.", ""), v) for k, v in load_from.items()])
 
     if 1:
+        from collections import OrderedDict
         if list(load_from.items())[0][0][:2] == "1." and list(model.state_dict().items())[0][0][:2] != "1.":
             load_from = OrderedDict([(k[2:], v) for k, v in load_from.items()])
 
         load_from = OrderedDict([(k, v) for k, v in load_from.items() if "gate" not in k])
 
-    model.load_state_dict(load_from, strict=True)
+    # remove the prefix from the keys
+    load_from2 = {}
+    for k, v in load_from.items():
+        if k == 'resnet34_8s.fc.weight':
+            v = v[:, :, 0, 0]
+        load_from2[k.replace("resnet34_8s.", "")] = v
+
+    model.load_state_dict(load_from2, strict=True)
 
     epoch_from = -1
     if 'epoch' in checkpoint.keys():
@@ -55,6 +64,7 @@ def create_folder(directory):
 
 
 random.seed(0)
+
 
 def distributed_is_initialized():
     if distributed.is_available():
