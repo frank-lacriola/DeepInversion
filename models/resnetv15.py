@@ -233,31 +233,31 @@ resnet_versions = {
             'net' : ResNet,
             'block' : BasicBlock,
             'layers' : [2, 2, 2, 2],
-            'num_classes' : 1000,
+            'num_classes' : 21,
             },
          'resnet34' : {
             'net' : ResNet,
             'block' : BasicBlock,
             'layers' : [3, 4, 6, 3],
-            'num_classes' : 1000,
+            'num_classes' : 21,
             },
          'resnet50' : {
             'net' : ResNet,
             'block' : Bottleneck,
             'layers' : [3, 4, 6, 3],
-            'num_classes' : 1000,
+            'num_classes' : 21,
             },
         'resnet101' : {
             'net' : ResNet,
             'block' : Bottleneck,
             'layers' : [3, 4, 23, 3],
-            'num_classes' : 1000,
+            'num_classes' : 21,
             },
         'resnet152' : {
             'net' : ResNet,
             'block' : Bottleneck,
             'layers' : [3, 8, 36, 3],
-            'num_classes' : 1000,
+            'num_classes' : 21,
             },
         }
 
