@@ -263,12 +263,28 @@ resnet_versions = {
 
 
 def build_resnet(version, config, model_state=None):
+    # version = 'resnet50' : {
+    #             'net' : ResNet,
+    #             'block' : Bottleneck,
+    #             'layers' : [3, 4, 6, 3],
+    #             'num_classes' : 21,
+    #             },
     version = resnet_versions[version]
+    # config = 'classic' : {
+    #             'conv' : nn.Conv2d,
+    #             'conv_init' : 'fan_out',
+    #             'nonlinearity' : 'relu',
+    #             'last_bn_0_init' : False,
+    #             'activation' : lambda: nn.ReLU(inplace=True),
+    #             },
     config = resnet_configs[config]
 
     builder = ResNetBuilder(version, config)
     print("Version: {}".format(version))
     print("Config: {}".format(config))
+
+    # > version['net'] -> ResNet
+    # >> ResNet(builder,block,layers,num_classes)
     model = version['net'](builder,
                            version['block'],
                            version['layers'],
