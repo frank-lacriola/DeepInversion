@@ -198,7 +198,7 @@ class DeepInversionClass(object):
             # we're dealing with step 0, so just with 16 classes, or 21?
             # >> 21?? Check with Fabio
             num_classes = 21
-            targets = torch.LongTensor([random.randint(0,num_classes) for _ in range(self.bs)]).to('cuda')
+            targets = torch.LongTensor([random.randint(0,num_classes-1) for _ in range(self.bs)]).to('cuda')
 
 
             # skipped
