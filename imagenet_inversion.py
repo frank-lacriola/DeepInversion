@@ -62,12 +62,21 @@ def run(args):
     # until now, we only have the net -> it is not pretrained
     if args.arch_name == "resnet50v15":
         from models.resnetv15 import build_resnet
-        net = build_resnet("resnet50", "classic")
+        net = build_resnet("resnet34", "classic")
     else:
         print("loading torchvision model for inversion with the name: {}".format(args.arch_name))
         # this is the teacher
         # so we need to upload here the pre trained arch on the VOC
-        net = models.__dict__[args.arch_name](pretrained=True)
+        net = models.__dict__["resnet34"](pretrained=False, num_classes=21)
+        checkpoint_teacher = torch.load("/content/drive/MyDrive/resnet_34_8s_68.pth")
+
+        checkpoint_teacher_v2 = {}
+        for k, v in checkpoint_teacher.items():
+            new_k = k.replace("resnet34_8s.", "")
+            checkpoint_teacher_v2[new_k] = v
+
+        checkpoint_teacher_v2['fc.weight'] = checkpoint_teacher_v2['fc.weight'][:, :, 0, 0]
+        net.load_state_dict(checkpoint_teacher_v2)
 
     net = net.to(device)
 
@@ -79,7 +88,7 @@ def run(args):
 
     ### load models
     # it it the checkpoint of the whole deepinversion model(?)
-    if args.arch_name=="resnet50v15":
+    if args.arch_name == "resnet50v15":
         path_to_model = "./models/resnet50v15/model_best.pth.tar"
         load_model_pytorch(net, path_to_model, gpu_n=torch.cuda.current_device())
 
@@ -93,7 +102,7 @@ def run(args):
         if args.local_rank == 0:
             print("loading verifier: ", args.verifier_arch)
             # here we should load our pre trained network on the VOC
-            net_verifier = models.__dict__[args.verifier_arch](pretrained=True).to(device)
+            net_verifier = models.__dict__[args.verifier_arch](pretrained=False).to(device)
             net_verifier.eval()
 
             if use_fp16:
@@ -104,8 +113,18 @@ def run(args):
     if args.adi_scale != 0.0:
         student_arch = "resnet18"
         # here we should load our pre trained network on the VOC
-        net_verifier = models.__dict__[student_arch](pretrained=True).to(device)
+        net_verifier = models.__dict__[student_arch](pretrained=False, num_classes=21).to(device)
         net_verifier.eval()
+
+        checkpoint_ver = torch.load("/content/drive/MyDrive/resnet_18_8s_59.pth")
+        checkpoint_ver_v2 = {}
+
+        for k, v in checkpoint_ver.items():
+            new_k = k.replace("resnet18_8s.", "")
+            checkpoint_ver_v2[new_k] = v
+
+        checkpoint_ver_v2['fc.weight'] = checkpoint_ver_v2['fc.weight'][:, :, 0, 0]
+        net_verifier.load_state_dict(checkpoint_ver_v2)
 
         if use_fp16:
             net_verifier, _ = amp.initialize(net_verifier, [], opt_level="O2")
@@ -122,9 +141,9 @@ def run(args):
 
     exp_name = args.exp_name
     # final images will be stored here:
-    adi_data_path = "./final_images/%s"%exp_name
+    adi_data_path = "./final_images/%s" % exp_name
     # temporal data and generations will be stored here
-    exp_name = "generations/%s"%exp_name
+    exp_name = "generations/%s" % exp_name
 
     args.iterations = 2000
     args.start_noise = True
@@ -161,7 +180,7 @@ def run(args):
 
     # check accuracy of verifier
     if args.verifier:
-        hook_for_display = lambda x,y: validate_one(x, y, net_verifier)
+        hook_for_display = lambda x, y: validate_one(x, y, net_verifier)
     else:
         hook_for_display = None
 
@@ -170,17 +189,18 @@ def run(args):
                                              path=exp_name,
                                              parameters=parameters,
                                              setting_id=args.setting_id,
-                                             bs = bs,
-                                             use_fp16 = args.fp16,
-                                             jitter = jitter,
+                                             bs=bs,
+                                             use_fp16=args.fp16,
+                                             jitter=jitter,
                                              criterion=criterion,
-                                             coefficients = coefficients,
-                                             network_output_function = network_output_function,
-                                             hook_for_display = hook_for_display)
-    net_student=None
+                                             coefficients=coefficients,
+                                             network_output_function=network_output_function,
+                                             hook_for_display=hook_for_display)
+    net_student = None
     if args.adi_scale != 0:
         net_student = net_verifier
     DeepInversionEngine.generate_batch(net_student=net_student)
+
 
 def main():
     parser = argparse.ArgumentParser()
@@ -190,7 +210,8 @@ def main():
     parser.add_argument('--no-cuda', action='store_true')
 
     parser.add_argument('--epochs', default=20000, type=int, help='batch size')
-    parser.add_argument('--setting_id', default=0, type=int, help='settings for optimization: 0 - multi resolution, 1 - 2k iterations, 2 - 20k iterations')
+    parser.add_argument('--setting_id', default=0, type=int,
+                        help='settings for optimization: 0 - multi resolution, 1 - 2k iterations, 2 - 20k iterations')
     parser.add_argument('--bs', default=64, type=int, help='batch size')
     parser.add_argument('--jitter', default=30, type=int, help='batch size')
     parser.add_argument('--comment', default='', type=str, help='batch size')
@@ -200,17 +221,21 @@ def main():
     parser.add_argument('--exp_name', type=str, default='test', help='where to store experimental data')
 
     parser.add_argument('--verifier', action='store_true', help='evaluate batch with another model')
-    parser.add_argument('--verifier_arch', type=str, default='mobilenet_v2', help = "arch name from torchvision models to act as a verifier")
+    parser.add_argument('--verifier_arch', type=str, default='mobilenet_v2',
+                        help="arch name from torchvision models to act as a verifier")
 
     parser.add_argument('--do_flip', action='store_true', help='apply flip during model inversion')
     parser.add_argument('--random_label', action='store_true', help='generate random label for optimization')
-    parser.add_argument('--r_feature', type=float, default=0.05, help='coefficient for feature distribution regularization')
-    parser.add_argument('--first_bn_multiplier', type=float, default=10., help='additional multiplier on first bn layer of R_feature')
+    parser.add_argument('--r_feature', type=float, default=0.05,
+                        help='coefficient for feature distribution regularization')
+    parser.add_argument('--first_bn_multiplier', type=float, default=10.,
+                        help='additional multiplier on first bn layer of R_feature')
     parser.add_argument('--tv_l1', type=float, default=0.0, help='coefficient for total variation L1 loss')
     parser.add_argument('--tv_l2', type=float, default=0.0001, help='coefficient for total variation L2 loss')
     parser.add_argument('--lr', type=float, default=0.2, help='learning rate for optimization')
     parser.add_argument('--l2', type=float, default=0.00001, help='l2 loss on the image')
-    parser.add_argument('--main_loss_multiplier', type=float, default=1.0, help='coefficient for the main loss in optimization')
+    parser.add_argument('--main_loss_multiplier', type=float, default=1.0,
+                        help='coefficient for the main loss in optimization')
     parser.add_argument('--store_best_images', action='store_true', help='save best images as separate files')
 
     args = parser.parse_args()
