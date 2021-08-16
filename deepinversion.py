@@ -157,10 +157,12 @@ class DeepInversionClass(object):
         self.prefix = prefix
 
         local_rank = torch.cuda.current_device()
+
         if local_rank==0:
             create_folder(prefix)
             create_folder(prefix + "/best_images/")
             create_folder(self.final_data_path)
+
             # save images to folders
             # for m in range(1000):
             #     create_folder(self.final_data_path + "/s{:03d}".format(m))
@@ -191,7 +193,14 @@ class DeepInversionClass(object):
         # setup target labels
         if targets is None:
             #only works for classification now, for other tasks need to provide target vector
-            targets = torch.LongTensor([random.randint(0, 999) for _ in range(self.bs)]).to('cuda')
+
+            # GET RANDOM LABELS
+            # we're dealing with step 0, so just with 16 classes, or 21?
+            # >> 21?? Check with Fabio
+            num_classes = 21
+            targets = torch.LongTensor([random.randint(0,num_classes) for _ in range(self.bs)]).to('cuda')
+
+            # skipped
             if not self.random_label:
                 # preselected classes, good for ResNet50v1.5
                 targets = [1, 933, 946, 980, 25, 63, 92, 94, 107, 985, 151, 154, 207, 250, 270, 277, 283, 292, 294, 309,
@@ -204,6 +213,9 @@ class DeepInversionClass(object):
         img_original = self.image_resolution
 
         data_type = torch.half if use_fp16 else torch.float
+
+        # img_original is our crop size
+        # It is the noise
         inputs = torch.randn((self.bs, 3, img_original, img_original), requires_grad=True, device='cuda',
                              dtype=data_type)
         pooling_function = nn.modules.pooling.AvgPool2d(kernel_size=2)
@@ -376,6 +388,7 @@ class DeepInversionClass(object):
         local_rank = torch.cuda.current_device()
         for id in range(images.shape[0]):
             class_id = targets[id].item()
+
             if 0:
                 #save into separate folders
                 place_to_store = '{}/s{:03d}/img_{:05d}_id{:03d}_gpu_{}_2.jpg'.format(self.final_data_path, class_id,
