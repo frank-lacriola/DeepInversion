@@ -59,11 +59,14 @@ def run(args):
     torch.manual_seed(args.local_rank)
     device = torch.device('cuda' if torch.cuda.is_available() and not args.no_cuda else 'cpu')
 
+    # until now, we only have the net -> it is not pretrained
     if args.arch_name == "resnet50v15":
         from models.resnetv15 import build_resnet
         net = build_resnet("resnet50", "classic")
     else:
         print("loading torchvision model for inversion with the name: {}".format(args.arch_name))
+        # this is the teacher
+        # so we need to upload here the pre trained arch on the VOC
         net = models.__dict__[args.arch_name](pretrained=True)
 
     net = net.to(device)
@@ -75,6 +78,7 @@ def run(args):
     print('==> Resuming from checkpoint..')
 
     ### load models
+    # it it the checkpoint of the whole deepinversion model(?)
     if args.arch_name=="resnet50v15":
         path_to_model = "./models/resnet50v15/model_best.pth.tar"
         load_model_pytorch(net, path_to_model, gpu_n=torch.cuda.current_device())
@@ -88,14 +92,18 @@ def run(args):
         # if multiple GPUs are used then we can change code to load different verifiers to different GPUs
         if args.local_rank == 0:
             print("loading verifier: ", args.verifier_arch)
+            # here we should load our pre trained network on the VOC
             net_verifier = models.__dict__[args.verifier_arch](pretrained=True).to(device)
             net_verifier.eval()
 
             if use_fp16:
                 net_verifier = net_verifier.half()
 
+    # since there is competiton among teacher and student
+    # the verifier will be the actual student
     if args.adi_scale != 0.0:
         student_arch = "resnet18"
+        # here we should load our pre trained network on the VOC
         net_verifier = models.__dict__[student_arch](pretrained=True).to(device)
         net_verifier.eval()
 
