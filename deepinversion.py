@@ -342,6 +342,7 @@ class DeepInversionClass(object):
                     loss_aux += self.adi_scale * loss_verifier_cig
 
                 loss = self.main_loss_multiplier * loss + loss_aux
+                loss = loss.mean()
 
                 if local_rank==0:
                     if iteration % save_every==0:
