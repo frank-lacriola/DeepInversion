@@ -200,8 +200,9 @@ class DeepInversionClass(object):
             num_classes = 21
             targets = torch.LongTensor([random.randint(0,num_classes) for _ in range(self.bs)]).to('cuda')
 
+
             # skipped
-            if not self.random_label:
+            if self.random_label:
                 # preselected classes, good for ResNet50v1.5
                 targets = [1, 933, 946, 980, 25, 63, 92, 94, 107, 985, 151, 154, 207, 250, 270, 277, 283, 292, 294, 309,
                            311,
@@ -305,6 +306,8 @@ class DeepInversionClass(object):
                     else:
                         outputs_student = net_student(inputs_jit)
 
+
+
                     T = 3.0
                     if 1:
                         T = 3.0
@@ -406,7 +409,6 @@ class DeepInversionClass(object):
     def generate_batch(self, net_student=None, targets=None):
         # for ADI detach student and add put to eval mode
         net_teacher = self.net_teacher
-
         use_fp16 = self.use_fp16
 
         # fix net_student
