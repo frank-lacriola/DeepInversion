@@ -199,11 +199,12 @@ def run(args):
     net_student = None
     if args.adi_scale != 0:
         net_student = net_verifier
-    DeepInversionEngine.generate_batch(net_student=net_student)
+    DeepInversionEngine.generate_batch(net_student=net_student, n_batches=args.n_batches)
 
 
 def main():
     parser = argparse.ArgumentParser()
+    parser.add_argument('-nb', '--n_batches', type=int, default=1, help='Number of batches to generate for each run')
     parser.add_argument('-s', '--worldsize', type=int, default=1, help='Number of processes participating in the job.')
     parser.add_argument('--local_rank', '--rank', type=int, default=0, help='Rank of the current process.')
     parser.add_argument('--adi_scale', type=float, default=0.0, help='Coefficient for Adaptive Deep Inversion')
