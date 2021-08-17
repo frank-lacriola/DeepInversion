@@ -228,6 +228,10 @@ class DeepInversionClass(object):
 
         iteration = 0
         for lr_it, lower_res in enumerate([2, 1]):
+
+            # 0, 2
+            # 1, 1
+
             if lr_it==0:
                 iterations_per_layer = 2000
             else:
@@ -372,7 +376,7 @@ class DeepInversionClass(object):
                     best_inputs = inputs.data.clone()
                     best_cost = loss.item()
 
-                if iteration % save_every==0 and (save_every > 0):
+                if iteration % save_every == 0 and (save_every > 0):
                     if local_rank==0:
                         vutils.save_image(inputs,
                                           '{}/best_images/output_{:05d}_gpu_{}.png'.format(self.prefix,
@@ -407,22 +411,24 @@ class DeepInversionClass(object):
             pil_image = Image.fromarray((image_np * 255).astype(np.uint8))
             pil_image.save(place_to_store)
 
-    def generate_batch(self, net_student=None, targets=None):
-        # for ADI detach student and add put to eval mode
-        net_teacher = self.net_teacher
-        use_fp16 = self.use_fp16
+    def generate_batch(self, net_student=None, targets=None, n_batches=1):
 
-        # fix net_student
-        if not (net_student is None):
-            net_student = net_student.eval()
+        for _ in range(n_batches):
+            # for ADI detach student and add put to eval mode
+            net_teacher = self.net_teacher
+            use_fp16 = self.use_fp16
 
-        if targets is not None:
-            targets = torch.from_numpy(np.array(targets).squeeze()).cuda()
-            if use_fp16:
-                targets = targets.half()
+            # fix net_student
+            if not (net_student is None):
+                net_student = net_student.eval()
 
-        self.get_images(net_student=net_student, targets=targets)
+            if targets is not None:
+                targets = torch.from_numpy(np.array(targets).squeeze()).cuda()
+                if use_fp16:
+                    targets = targets.half()
 
-        net_teacher.eval()
+            self.get_images(net_student=net_student, targets=targets)
 
-        self.num_generations += 1
+            net_teacher.eval()
+
+            self.num_generations += 1
