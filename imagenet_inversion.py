@@ -176,7 +176,7 @@ def run(args):
     jitter = 30
 
     parameters = dict()
-    parameters["resolution"] = 512
+    parameters["resolution"] = 256
     parameters["random_label"] = False
     parameters["start_noise"] = True
     parameters["detach_student"] = False
