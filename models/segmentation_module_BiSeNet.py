@@ -5,7 +5,7 @@ import torch.nn.functional as functional
 
 from functools import reduce
 
-from modules.build_BiSeNet import  BiSeNet
+from models.build_BiSeNet import  BiSeNet
 
 def make_model(opts, classes=None):
 
@@ -50,14 +50,20 @@ class IncrementalSegmentationBiSeNet(nn.Module):
         assert isinstance(classes, list), \
             "Classes must be a list where to every index correspond the num of classes for that task"
 
+        if body == "resnet18":
+          in_channels1, in_channels2 = 256, 512
+        elif body == "resnet50":
+          in_channels1, in_channels2 = 1024, 2048
+
+
         # classifiers supervision 1
         self.supervision1 = nn.ModuleList(
-            [nn.Conv2d(in_channels=1024, out_channels=c, kernel_size=1) for c in classes]
+            [nn.Conv2d(in_channels=in_channels1, out_channels=c, kernel_size=1) for c in classes]
         )
 
         # classifiers supervision 2
         self.supervision2 = nn.ModuleList(
-            [nn.Conv2d(in_channels=2048, out_channels=c, kernel_size=1) for c in classes]
+            [nn.Conv2d(in_channels=in_channels2, out_channels=c, kernel_size=1) for c in classes]
         )
 
         # classifiers for the final layers
