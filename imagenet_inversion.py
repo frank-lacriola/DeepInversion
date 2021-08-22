@@ -28,8 +28,8 @@ import torchvision.models as models
 from utils.utils import load_model_pytorch, distributed_is_initialized
 
 from models.segmentation_module_BiSeNet import make_model
-from modules.build_BiSeNet import  BiSeNet
-
+from models.build_BiSeNet import BiSeNet
+from models.segmentation_module_BiSeNet import IncrementalSegmentationBiSeNet
 
 random.seed(0)
 
@@ -73,15 +73,22 @@ def run(args):
         # so we need to upload here the pre trained arch on the VOC
         # net = models.__dict__["resnet50"](pretrained=False, num_classes=16)
 
-
-        checkpoint_teacher = torch.load("/content/drive/MyDrive/step-0-resnet18.pth")['model_state']
+        checkpoint_teacher = torch.load("/content/drive/MyDrive/step-0-resnet50.pth")
         # checkpoint_teacher_v2 = {}
-
+        # print(checkpoint_teacher)
+        checkpoint_teacher = checkpoint_teacher['model_state']
         head = BiSeNet("resnet50")
         body = "resnet50"
-        net = IncrementalSegmentationBiSeNet(body, head, classes=16, fusion_mode="mean")
-        net.load_state_dict(checkpoint_teacher)
+        classes_edit = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15]
+        net = IncrementalSegmentationBiSeNet(body, head, classes=classes_edit, fusion_mode="mean")
 
+        net.supervision1[0] = nn.Conv2d(in_channels=1024, out_channels=16, kernel_size=1)
+        net.supervision2[0] = nn.Conv2d(in_channels=2048, out_channels=16, kernel_size=1)
+        net.cls[0] = nn.Conv2d(in_channels=256, out_channels=16, kernel_size=1)
+
+        # print(net)
+
+        net.load_state_dict(checkpoint_teacher, strict=False)
 
         """
         for k, v in checkpoint_teacher.items():
@@ -106,7 +113,6 @@ def run(args):
         print(net)
         net.layer4[2].bn3 = nn.BatchNorm2d(4096, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
         """
-
 
     net = net.to(device)
 
@@ -143,6 +149,8 @@ def run(args):
     if args.adi_scale != 0.0:
         student_arch = "resnet18"
         # here we should load our pre trained network on the VOC
+
+        """
         net_verifier = models.__dict__[student_arch](pretrained=False, num_classes=16).to(device)
         net_verifier.eval()
 
@@ -163,10 +171,26 @@ def run(args):
                     checkpoint_ver_v2["fc.bias"] = v
                 elif k.split(".")[2] == "weight":
                     checkpoint_ver_v2["fc.weight"] = v
+        """
+
+        checkpoint_verifier = torch.load("/content/drive/MyDrive/step-0-resnet18.pth")
+        # checkpoint_teacher_v2 = {}
+        # print(checkpoint_teacher)
+        checkpoint_verifier = checkpoint_verifier['model_state']
+        head = BiSeNet("resnet18")
+        body = "resnet18"
+        classes_edit = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15]
+        net_verifier = IncrementalSegmentationBiSeNet(body, head, classes=classes_edit, fusion_mode="mean")
+
+        net_verifier.supervision1[0] = nn.Conv2d(in_channels=256, out_channels=16, kernel_size=1)
+        net_verifier.supervision2[0] = nn.Conv2d(in_channels=512, out_channels=16, kernel_size=1)
+        net_verifier.cls[0] = nn.Conv2d(in_channels=256, out_channels=16, kernel_size=1)
+
+        net_verifier.load_state_dict(checkpoint_verifier, strict=False)
 
         # checkpoint_ver_v2['fc.weight'] = checkpoint_ver_v2['fc.weight'][:, :, 0, 0]
-        net_verifier.fc = nn.Conv2d(in_channels=256, out_channels=16, kernel_size=1)
-        net_verifier.load_state_dict(checkpoint_ver_v2)
+        # net_verifier.fc = nn.Conv2d(in_channels=256, out_channels=16, kernel_size=1)
+        # net_verifier.load_state_dict(checkpoint_ver_v2)
 
         if use_fp16:
             net_verifier, _ = amp.initialize(net_verifier, [], opt_level="O2")
