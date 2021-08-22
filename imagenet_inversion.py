@@ -68,15 +68,8 @@ def run(args):
         # this is the teacher
         # so we need to upload here the pre trained arch on the VOC
         net = models.__dict__["resnet50"](pretrained=False, num_classes=16)
-        checkpoint_teacher = torch.load("/content/drive/MyDrive/step-0.pth")['model_state']
+        checkpoint_teacher = torch.load("/content/drive/MyDrive/step-0-resnet18.pth")['model_state']
 
-        """
-          >> preprocessing for pretrained ResNet from GitHub
-        checkpoint_teacher_v2 = {}
-        for k, v in checkpoint_teacher.items():
-            new_k = k.replace("resnet34_8s.", "")
-            checkpoint_teacher_v2[new_k] = v
-        """
         checkpoint_teacher_v2 = {}
 
         for k, v in checkpoint_teacher.items():
@@ -97,8 +90,9 @@ def run(args):
                     checkpoint_teacher_v2["fc.weight"] = v
 
         net.fc = nn.Conv2d(in_channels=256, out_channels=16, kernel_size=1)
-        # checkpoint_teacher_v2['fc.weight'] = checkpoint_teacher_v2['fc.weight'][:, :, 0, 0]
         net.load_state_dict(checkpoint_teacher_v2)
+        print(net)
+        net.layer4[2].bn3 = nn.BatchNorm2d(4096, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
 
     net = net.to(device)
 
@@ -138,27 +132,26 @@ def run(args):
         net_verifier = models.__dict__[student_arch](pretrained=False, num_classes=16).to(device)
         net_verifier.eval()
 
-        checkpoint_ver = torch.load("/content/drive/MyDrive/Incremental_Learning_Project/Checkpoints-MiB-V2/--Step-0-resnet-18-20-epochs/15-5s-voc_Experiment_Epoch19.pth")['model_state']
+        checkpoint_ver = torch.load("/content/drive/MyDrive/step-0-resnet18.pth")['model_state']
         checkpoint_ver_v2 = {}
 
         for k, v in checkpoint_ver.items():
             # we're interested into : head.context_path
 
-            #if k.split(".")[1] == "context_path" \
-            #        and k.split(".")[2] not in ["features"]:
-            #    new_k = k.replace("head.context_path.", "")
-            #    checkpoint_ver_v2[new_k] = v
+            if k.split(".")[1] == "context_path" and k.split(".")[2] != "features":
+                new_k = k.replace("head.context_path.", "")
+                checkpoint_ver_v2[new_k] = v
 
             # edge cases -> we moved out the fc layers for BiSeNet, so
             # they are called on our checkpoint "cls"
-
             if k.split(".")[0] == "cls":
                 if k.split(".")[2] == "bias":
                     checkpoint_ver_v2["fc.bias"] = v
                 elif k.split(".")[2] == "weight":
                     checkpoint_ver_v2["fc.weight"] = v
 
-        checkpoint_ver_v2['fc.weight'] = checkpoint_ver_v2['fc.weight'][:, :, 0, 0]
+        # checkpoint_ver_v2['fc.weight'] = checkpoint_ver_v2['fc.weight'][:, :, 0, 0]
+        net_verifier.fc = nn.Conv2d(in_channels=256, out_channels=16, kernel_size=1)
         net_verifier.load_state_dict(checkpoint_ver_v2)
 
         if use_fp16:
