@@ -138,7 +138,7 @@ def run(args):
         net_verifier = models.__dict__[student_arch](pretrained=False, num_classes=16).to(device)
         net_verifier.eval()
 
-        checkpoint_ver = torch.load("/content/drive/MyDrive/Incremental_Learning_Project/Checkpoints-MiB-V2/--Step-0-resnet-18-20-epochs")
+        checkpoint_ver = torch.load("/content/drive/MyDrive/Incremental_Learning_Project/Checkpoints-MiB-V2/--Step-0-resnet-18-20-epochs/15-5s-voc_Experiment_Epoch19.pth")
         checkpoint_ver_v2 = {}
 
         for k, v in checkpoint_ver.items():
@@ -147,12 +147,12 @@ def run(args):
             #if k.split(".")[1] == "context_path" \
             #        and k.split(".")[2] not in ["features"]:
             #    new_k = k.replace("head.context_path.", "")
-                checkpoint_ver_v2[new_k] = v
+            #    checkpoint_ver_v2[new_k] = v
 
             # edge cases -> we moved out the fc layers for BiSeNet, so
             # they are called on our checkpoint "cls"
-            if k.split(".")[0] == "cls":
 
+            if k.split(".")[0] == "cls":
                 if k.split(".")[2] == "bias":
                     checkpoint_ver_v2["fc.bias"] = v
                 elif k.split(".")[2] == "weight":
