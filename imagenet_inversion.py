@@ -27,6 +27,10 @@ import os
 import torchvision.models as models
 from utils.utils import load_model_pytorch, distributed_is_initialized
 
+from models.segmentation_module_BiSeNet import make_model
+from modules.build_BiSeNet import  BiSeNet
+
+
 random.seed(0)
 
 
@@ -67,11 +71,19 @@ def run(args):
         print("loading torchvision model for inversion with the name: {}".format(args.arch_name))
         # this is the teacher
         # so we need to upload here the pre trained arch on the VOC
-        net = models.__dict__["resnet50"](pretrained=False, num_classes=16)
+        # net = models.__dict__["resnet50"](pretrained=False, num_classes=16)
+
+
         checkpoint_teacher = torch.load("/content/drive/MyDrive/step-0-resnet18.pth")['model_state']
+        # checkpoint_teacher_v2 = {}
 
-        checkpoint_teacher_v2 = {}
+        head = BiSeNet("resnet50")
+        body = "resnet50"
+        net = IncrementalSegmentationBiSeNet(body, head, classes=16, fusion_mode="mean")
+        net.load_state_dict(checkpoint_teacher)
 
+
+        """
         for k, v in checkpoint_teacher.items():
             # we're interested into : head.context_path
 
@@ -93,6 +105,8 @@ def run(args):
         net.load_state_dict(checkpoint_teacher_v2)
         print(net)
         net.layer4[2].bn3 = nn.BatchNorm2d(4096, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+        """
+
 
     net = net.to(device)
 
