@@ -138,7 +138,7 @@ def run(args):
         net_verifier = models.__dict__[student_arch](pretrained=False, num_classes=16).to(device)
         net_verifier.eval()
 
-        checkpoint_ver = torch.load("/content/drive/MyDrive/Incremental_Learning_Project/Checkpoints-MiB-V2/--Step-0-resnet-18-20-epochs/15-5s-voc_Experiment_Epoch19.pth")
+        checkpoint_ver = torch.load("/content/drive/MyDrive/Incremental_Learning_Project/Checkpoints-MiB-V2/--Step-0-resnet-18-20-epochs/15-5s-voc_Experiment_Epoch19.pth")['model_state']
         checkpoint_ver_v2 = {}
 
         for k, v in checkpoint_ver.items():
