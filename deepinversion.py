@@ -197,7 +197,7 @@ class DeepInversionClass(object):
             # GET RANDOM LABELS
             # we're dealing with step 0, so just with 16 classes, or 21?
             # >> 21?? Check with Fabio
-            num_classes = 21
+            num_classes = 16
             targets = torch.LongTensor([random.randint(0,num_classes-1) for _ in range(self.bs)]).to('cuda')
 
 
@@ -293,6 +293,12 @@ class DeepInversionClass(object):
                 outputs = self.network_output_function(outputs)
 
                 # R_cross classification loss
+                # print(inputs_jit.shape)
+                # print(outputs.shape)
+                # print(targets.shape)
+                # print(targets)
+                # print(outputs)
+
                 loss = criterion(outputs, targets)
 
                 # R_prior losses
