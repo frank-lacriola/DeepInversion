@@ -77,14 +77,16 @@ def run(args):
         # checkpoint_teacher_v2 = {}
         # print(checkpoint_teacher)
         checkpoint_teacher = checkpoint_teacher['model_state']
+
         head = BiSeNet("resnet50")
         body = "resnet50"
         classes_edit = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15]
-        net = IncrementalSegmentationBiSeNet(body, head, classes=classes_edit, fusion_mode="mean")
+        net = IncrementalSegmentationBiSeNet(body, head, classes=[16], fusion_mode="mean")
 
-        net.supervision1[0] = nn.Conv2d(in_channels=1024, out_channels=16, kernel_size=1)
-        net.supervision2[0] = nn.Conv2d(in_channels=2048, out_channels=16, kernel_size=1)
-        net.cls[0] = nn.Conv2d(in_channels=256, out_channels=16, kernel_size=1)
+        # print(net)
+        # net.supervision1[0] = nn.Conv2d(in_channels=1024, out_channels=16, kernel_size=1)
+        # net.supervision2[0] = nn.Conv2d(in_channels=2048, out_channels=16, kernel_size=1)
+        # net.cls[0] = nn.Conv2d(in_channels=256, out_channels=16, kernel_size=1)
 
         # print(net)
 
