@@ -43,7 +43,9 @@ def validate_one(input, target, model):
         batch_size = target.size(0)
 
         _, pred = output.topk(maxk, 1, True, True)
-        pred = pred.t()
+        # updated since we have one image
+        # >> it was pred.t()
+        pred = pred[:,:,0,0].t()
         correct = pred.eq(target.view(1, -1).expand_as(pred))
 
         res = []
@@ -182,11 +184,7 @@ def run(args):
         head = BiSeNet("resnet18")
         body = "resnet18"
         classes_edit = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15]
-        net_verifier = IncrementalSegmentationBiSeNet(body, head, classes=classes_edit, fusion_mode="mean")
-
-        net_verifier.supervision1[0] = nn.Conv2d(in_channels=256, out_channels=16, kernel_size=1)
-        net_verifier.supervision2[0] = nn.Conv2d(in_channels=512, out_channels=16, kernel_size=1)
-        net_verifier.cls[0] = nn.Conv2d(in_channels=256, out_channels=16, kernel_size=1)
+        net_verifier = IncrementalSegmentationBiSeNet(body, head, classes=[16], fusion_mode="mean")
 
         net_verifier.load_state_dict(checkpoint_verifier, strict=False)
 
