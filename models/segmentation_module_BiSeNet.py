@@ -81,9 +81,12 @@ class IncrementalSegmentationBiSeNet(nn.Module):
 
         features, features_cx1, features_cx2 = self.head(x)
         self.features = features
+
         out = []
         cx1_out = []
         cx2_out = []
+
+        print(self.cls)
 
         for mod in self.cls:
             out.append(mod(features))
@@ -95,6 +98,7 @@ class IncrementalSegmentationBiSeNet(nn.Module):
             cx2_out.append(mod(features_cx2))
 
         x_o = torch.cat(out, dim=1)
+
         cx1_sup = torch.cat(cx1_out, dim=1)
         cx2_sup = torch.cat(cx2_out, dim=1)
 
@@ -122,6 +126,8 @@ class IncrementalSegmentationBiSeNet(nn.Module):
     def forward(self, x, scales=None, do_flip=False, ret_intermediate=False):
         out_size = x.shape[-2:]
 
+        print("out_size", out_size)
+
         if ret_intermediate:
             out, out_cx1, out_cx2 = self._network(x, ret_intermediate)
             # scale factor requested for BiSeNet
@@ -129,8 +135,13 @@ class IncrementalSegmentationBiSeNet(nn.Module):
             out_1 = functional.interpolate(out_cx1, size=out_size, mode='bilinear', align_corners=False)
             out_2 = functional.interpolate(out_cx2, size=out_size, mode='bilinear', align_corners=False)
             return out, out_1, out_2
+        print("X : ",x.shape)
+        net_w = self._network(x, ret_intermediate)
 
-        return functional.interpolate(self._network(x, ret_intermediate), size=out_size, mode="bilinear", align_corners=False)
+        print("self._network : ", net_w.shape)
+        f = functional.interpolate(net_w, size=out_size, mode="bilinear", align_corners=False)
+
+        return f
 
     def fix_bn(self):
         for m in self.modules():
