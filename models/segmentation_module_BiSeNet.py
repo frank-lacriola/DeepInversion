@@ -5,10 +5,10 @@ import torch.nn.functional as functional
 
 from functools import reduce
 
-from models.build_BiSeNet import  BiSeNet
+from models.build_BiSeNet import BiSeNet
+
 
 def make_model(opts, classes=None):
-
     # string with the backbone e.g. 'resnet'
     body = opts.backbone
 
@@ -51,10 +51,9 @@ class IncrementalSegmentationBiSeNet(nn.Module):
             "Classes must be a list where to every index correspond the num of classes for that task"
 
         if body == "resnet18":
-          in_channels1, in_channels2 = 256, 512
+            in_channels1, in_channels2 = 256, 512
         elif body == "resnet50":
-          in_channels1, in_channels2 = 1024, 2048
-
+            in_channels1, in_channels2 = 1024, 2048
 
         # classifiers supervision 1
         self.supervision1 = nn.ModuleList(
@@ -85,8 +84,6 @@ class IncrementalSegmentationBiSeNet(nn.Module):
         out = []
         cx1_out = []
         cx2_out = []
-
-        print(self.cls)
 
         for mod in self.cls:
             out.append(mod(features))
@@ -126,8 +123,6 @@ class IncrementalSegmentationBiSeNet(nn.Module):
     def forward(self, x, scales=None, do_flip=False, ret_intermediate=False):
         out_size = x.shape[-2:]
 
-        print("out_size", out_size)
-
         if ret_intermediate:
             out, out_cx1, out_cx2 = self._network(x, ret_intermediate)
             # scale factor requested for BiSeNet
@@ -135,10 +130,9 @@ class IncrementalSegmentationBiSeNet(nn.Module):
             out_1 = functional.interpolate(out_cx1, size=out_size, mode='bilinear', align_corners=False)
             out_2 = functional.interpolate(out_cx2, size=out_size, mode='bilinear', align_corners=False)
             return out, out_1, out_2
-        print("X : ",x.shape)
+
         net_w = self._network(x, ret_intermediate)
 
-        print("self._network : ", net_w.shape)
         f = functional.interpolate(net_w, size=out_size, mode="bilinear", align_corners=False)
 
         return f
