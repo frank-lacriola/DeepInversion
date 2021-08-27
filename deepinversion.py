@@ -26,6 +26,62 @@ import numpy as np
 from utils.utils import lr_cosine_policy, lr_policy, beta_policy, mom_cosine_policy, clip, denormalize, create_folder
 
 
+class CustomPooling(nn.Module):
+    def __init__(self, beta=1, r_0=0, dim=(-1, -2), mode=None):
+        super(CustomPooling, self).__init__()
+        self.r_0 = r_0
+
+        self.dim = dim
+        self.reset_parameters()
+        self.mode = mode
+        # self.device = device
+
+        if self.mode is not None:
+            # make a beta for each class --> size of tensor.
+            self.beta = nn.Parameter(torch.nn.init.uniform_(torch.empty(3)), requires_grad=True)
+            # self.cuda(self.device)
+        else:
+            self.beta = nn.Parameter(torch.nn.init.uniform_(torch.empty(1)), requires_grad=True)
+
+    def reset_parameters(self, beta=None, r_0=None, dim=(-1, -2)):
+        if beta is not None:
+            init.zeros_(self.beta)
+        if r_0 is not None:
+            self.r_0 = r_0
+        self.dim = dim
+
+    def forward(self, x):
+        '''
+        :param x (tensor): tensor of shape [bs x K x h x w]
+        :return logsumexp_torch (tensor): tensor of shape [bs x K], holding class scores per class
+        '''
+
+        if self.mode is None:
+            const = self.r_0 + torch.exp(self.beta)
+            _, _, h, w = x.shape
+            average_constant = np.log(1. / (w * h))
+            const = const.to('cuda')
+            mod_out = const * x
+            # logsumexp_torch = 1 / const * average_constant + 1 / const * torch.logsumexp(mod_out, dim=(-1, -2))
+            logsumexp_torch = (average_constant + torch.logsumexp(mod_out, dim=(-1, -2)).to('cuda')) / const
+            return logsumexp_torch
+        else:
+            const = self.r_0 + torch.exp(self.beta)
+            _, d, h, w = x.shape
+
+            average_constant = np.log(1. / (w * h))
+            # mod_out = torch.zeros(x.shape)
+            self.cuda(self.device)
+            mod_out0 = const[0] * x[:, 0, :, :]
+            mod_out1 = const[1] * x[:, 1, :, :]
+            mod_out2 = const[2] * x[:, 2, :, :]
+
+            mod_out = torch.cat((mod_out0.unsqueeze(1), mod_out1.unsqueeze(1), mod_out2.unsqueeze(1)), dim=1)
+            # logsumexp_torch = 1 / const * average_constant + 1 / const * torch.logsumexp(mod_out, dim=(-1, -2))
+            logsumexp_torch = (average_constant + torch.logsumexp(mod_out, dim=(-1, -2))) / const
+            return logsumexp_torch
+
+
 class DeepInversionFeatureHook():
     '''
     Implementation of the forward hook to track feature statistics and compute a loss on them.
@@ -235,7 +291,7 @@ class DeepInversionClass(object):
             if lr_it == 0:
                 iterations_per_layer = 2000
             else:
-                iterations_per_layer = 1000 if not skipfirst else 2000
+                iterations_per_layer = 8000 if not skipfirst else 2000
                 if self.setting_id == 2:
                     iterations_per_layer = 20000
 
@@ -308,7 +364,12 @@ class DeepInversionClass(object):
 
                 t_temp = torch.Tensor(t_temp).type(torch.LongTensor).to('cuda')
 
-                loss = criterion(outputs, t_temp)
+                customPooling = CustomPooling()
+
+                outputs = customPooling(outputs)
+
+                # here
+                loss = criterion(outputs, targets)
 
                 # R_prior losses
                 loss_var_l1, loss_var_l2 = get_image_prior_losses(inputs_jit)
@@ -325,6 +386,8 @@ class DeepInversionClass(object):
                         outputs_student = net_student(inputs_jit).detach()
                     else:
                         outputs_student = net_student(inputs_jit)
+
+                    outputs_student = customPooling(outputs_student)
 
                     T = 3.0
                     if 1:
@@ -367,7 +430,7 @@ class DeepInversionClass(object):
                         print("------------iteration {}----------".format(iteration))
                         print("total loss", loss.item())
                         print("loss_r_feature", loss_r_feature.item())
-                        print("main criterion", criterion(outputs, t_temp).item())
+                        print("main criterion", criterion(outputs, targets).item())
 
                         if self.hook_for_display is not None:
                             self.hook_for_display(inputs, targets)

@@ -33,6 +33,60 @@ from models.segmentation_module_BiSeNet import IncrementalSegmentationBiSeNet
 
 random.seed(0)
 
+class CustomPooling(nn.Module):
+    def __init__(self, beta=1, r_0=0, dim=(-1, -2), mode=None):
+        super(CustomPooling, self).__init__()
+        self.r_0 = r_0
+
+        self.dim = dim
+        self.reset_parameters()
+        self.mode = mode
+        # self.device = device
+
+        if self.mode is not None:
+            # make a beta for each class --> size of tensor.
+            self.beta = nn.Parameter(torch.nn.init.uniform_(torch.empty(3)), requires_grad=True)
+            # self.cuda(self.device)
+        else:
+            self.beta = nn.Parameter(torch.nn.init.uniform_(torch.empty(1)), requires_grad=True)
+
+    def reset_parameters(self, beta=None, r_0=None, dim=(-1, -2)):
+        if beta is not None:
+            init.zeros_(self.beta)
+        if r_0 is not None:
+            self.r_0 = r_0
+        self.dim = dim
+
+    def forward(self, x):
+        '''
+        :param x (tensor): tensor of shape [bs x K x h x w]
+        :return logsumexp_torch (tensor): tensor of shape [bs x K], holding class scores per class
+        '''
+
+        if self.mode is None:
+            const = self.r_0 + torch.exp(self.beta)
+            _, _, h, w = x.shape
+            average_constant = np.log(1. / (w * h))
+            const = const.to('cuda')
+            mod_out = const * x
+            # logsumexp_torch = 1 / const * average_constant + 1 / const * torch.logsumexp(mod_out, dim=(-1, -2))
+            logsumexp_torch = (average_constant + torch.logsumexp(mod_out, dim=(-1, -2)).to('cuda')) / const
+            return logsumexp_torch
+        else:
+            const = self.r_0 + torch.exp(self.beta)
+            _, d, h, w = x.shape
+
+            average_constant = np.log(1. / (w * h))
+            # mod_out = torch.zeros(x.shape)
+            self.cuda(self.device)
+            mod_out0 = const[0] * x[:, 0, :, :]
+            mod_out1 = const[1] * x[:, 1, :, :]
+            mod_out2 = const[2] * x[:, 2, :, :]
+
+            mod_out = torch.cat((mod_out0.unsqueeze(1), mod_out1.unsqueeze(1), mod_out2.unsqueeze(1)), dim=1)
+            # logsumexp_torch = 1 / const * average_constant + 1 / const * torch.logsumexp(mod_out, dim=(-1, -2))
+            logsumexp_torch = (average_constant + torch.logsumexp(mod_out, dim=(-1, -2))) / const
+            return logsumexp_torch
 
 def validate_one(input, target, model):
     """Perform validation on the validation set"""
@@ -45,7 +99,8 @@ def validate_one(input, target, model):
         _, pred = output.topk(maxk, 1, True, True)
         # updated since we have one image
         # >> it was pred.t()
-        pred = pred[:,:,0,0].t()
+        pred = pred.t()
+        # pred = pred[:,:,0,0].t()
         correct = pred.eq(target.view(1, -1).expand_as(pred))
 
         res = []
@@ -56,6 +111,10 @@ def validate_one(input, target, model):
 
     with torch.no_grad():
         output = model(input)
+
+        customPooling = CustomPooling()
+        output = customPooling(output)
+
         prec1, prec5 = accuracy(output.data, target, topk=(1, 5))
 
     print("Verifier accuracy: ", prec1.item())
