@@ -22,6 +22,7 @@ import torch
 import torchvision.utils as vutils
 from PIL import Image
 import numpy as np
+from torch.cuda.amp import GradScaler
 
 from utils.utils import lr_cosine_policy, lr_policy, beta_policy, mom_cosine_policy, clip, denormalize, create_folder
 
@@ -252,8 +253,6 @@ class DeepInversionClass(object):
             # only works for classification now, for other tasks need to provide target vector
 
             # GET RANDOM LABELS
-            # we're dealing with step 0, so just with 16 classes, or 21?
-            # >> 21?? Check with Fabio
             num_classes = 16
             targets = torch.LongTensor([random.randint(0, num_classes - 1) for _ in range(self.bs)]).to('cuda')
 
@@ -269,7 +268,7 @@ class DeepInversionClass(object):
 
         img_original = self.image_resolution
 
-        data_type = torch.half if use_fp16 else torch.float
+        data_type = torch.float
 
         # img_original is our crop size
         # It is the noise
@@ -316,9 +315,12 @@ class DeepInversionClass(object):
             if use_fp16:
                 static_loss_scale = 256
                 static_loss_scale = "dynamic"
-                _, optimizer = amp.initialize([], optimizer, opt_level="O2", loss_scale=static_loss_scale)
+                #_, optimizer = amp.initialize([], optimizer, opt_level="O2", loss_scale=static_loss_scale)
 
             lr_scheduler = lr_cosine_policy(self.lr, 100, iterations_per_layer)
+
+            # GradScaler at the beginning of training
+            scaler = GradScaler()
 
             for iteration_loc in range(iterations_per_layer):
                 iteration += 1
@@ -346,69 +348,71 @@ class DeepInversionClass(object):
                 optimizer.zero_grad()
                 net_teacher.zero_grad()
 
-                outputs = net_teacher(inputs_jit)
-                outputs = self.network_output_function(outputs)
+                with amp.autocast():
 
-                # R_cross classification loss
-                # print(inputs_jit.shape)
-                # print(outputs.shape)
-                # print(targets.shape)
-                # print(targets)
-                # print(outputs)
+                    outputs = net_teacher(inputs_jit)
+                    outputs = self.network_output_function(outputs)
 
-                t_temp = []
+                    # R_cross classification loss
+                    # print(inputs_jit.shape)
+                    # print(outputs.shape)
+                    # print(targets.shape)
+                    # print(targets)
+                    # print(outputs)
 
-                for t in targets:
-                    array = np.ones((256, 256)) * t.item()
-                    t_temp.append(array)
+                    t_temp = []
 
-                t_temp = torch.Tensor(t_temp).type(torch.LongTensor).to('cuda')
+                    for t in targets:
+                        array = np.ones((256, 256)) * t.item()
+                        t_temp.append(array)
 
-                customPooling = CustomPooling()
+                    t_temp = torch.Tensor(t_temp).type(torch.LongTensor).to('cuda')
 
-                outputs = customPooling(outputs)
+                    customPooling = CustomPooling()
 
-                # here
-                loss = criterion(outputs, targets)
+                    outputs = customPooling(outputs)
 
-                # R_prior losses
-                loss_var_l1, loss_var_l2 = get_image_prior_losses(inputs_jit)
+                    # here
+                    loss = criterion(outputs, targets)
 
-                # R_feature loss
-                rescale = [self.first_bn_multiplier] + [1. for _ in range(len(self.loss_r_feature_layers) - 1)]
-                loss_r_feature = sum(
-                    [mod.r_feature * rescale[idx] for (idx, mod) in enumerate(self.loss_r_feature_layers)])
+                    # R_prior losses
+                    loss_var_l1, loss_var_l2 = get_image_prior_losses(inputs_jit)
 
-                # R_ADI
-                loss_verifier_cig = torch.zeros(1)
-                if self.adi_scale != 0.0:
-                    if self.detach_student:
-                        outputs_student = net_student(inputs_jit).detach()
-                    else:
-                        outputs_student = net_student(inputs_jit)
+                    # R_feature loss
+                    rescale = [self.first_bn_multiplier] + [1. for _ in range(len(self.loss_r_feature_layers) - 1)]
+                    loss_r_feature = sum(
+                        [mod.r_feature * rescale[idx] for (idx, mod) in enumerate(self.loss_r_feature_layers)])
 
-                    outputs_student = customPooling(outputs_student)
+                    # R_ADI
+                    loss_verifier_cig = torch.zeros(1)
+                    if self.adi_scale != 0.0:
+                        if self.detach_student:
+                            outputs_student = net_student(inputs_jit).detach()
+                        else:
+                            outputs_student = net_student(inputs_jit)
 
-                    T = 3.0
-                    if 1:
+                        outputs_student = customPooling(outputs_student)
+
                         T = 3.0
-                        # Jensen Shanon divergence:
-                        # another way to force KL between negative probabilities
-                        P = nn.functional.softmax(outputs_student / T, dim=1)
-                        Q = nn.functional.softmax(outputs / T, dim=1)
-                        M = 0.5 * (P + Q)
+                        if 1:
+                            T = 3.0
+                            # Jensen Shanon divergence:
+                            # another way to force KL between negative probabilities
+                            P = nn.functional.softmax(outputs_student / T, dim=1)
+                            Q = nn.functional.softmax(outputs / T, dim=1)
+                            M = 0.5 * (P + Q)
 
-                        P = torch.clamp(P, 0.01, 0.99)
-                        Q = torch.clamp(Q, 0.01, 0.99)
-                        M = torch.clamp(M, 0.01, 0.99)
-                        eps = 0.0
-                        loss_verifier_cig = 0.5 * kl_loss(torch.log(P + eps), M) + 0.5 * kl_loss(torch.log(Q + eps), M)
-                        # JS criteria - 0 means full correlation, 1 - means completely different
-                        loss_verifier_cig = 1.0 - torch.clamp(loss_verifier_cig, 0.0, 1.0)
+                            P = torch.clamp(P, 0.01, 0.99)
+                            Q = torch.clamp(Q, 0.01, 0.99)
+                            M = torch.clamp(M, 0.01, 0.99)
+                            eps = 0.0
+                            loss_verifier_cig = 0.5 * kl_loss(torch.log(P + eps), M) + 0.5 * kl_loss(torch.log(Q + eps), M)
+                            # JS criteria - 0 means full correlation, 1 - means completely different
+                            loss_verifier_cig = 1.0 - torch.clamp(loss_verifier_cig, 0.0, 1.0)
 
-                    if local_rank == 0:
-                        if iteration % save_every == 0:
-                            print('loss_verifier_cig', loss_verifier_cig.item())
+                        if local_rank == 0:
+                            if iteration % save_every == 0:
+                                print('loss_verifier_cig', loss_verifier_cig.item())
 
                 # l2 loss on images
                 loss_l2 = torch.norm(inputs_jit.view(self.bs, -1), dim=1).mean()
@@ -438,12 +442,13 @@ class DeepInversionClass(object):
                 # do image update
                 if use_fp16:
                     # optimizer.backward(loss)
-                    with amp.scale_loss(loss, optimizer) as scaled_loss:
-                        scaled_loss.backward()
+                    scaler.scale(loss).backward()
+                    scaler.step(optimizer)
+                    scaler.update()
                 else:
                     loss.backward()
+                    optimizer.step()
 
-                optimizer.step()
 
                 # clip color outlayers
                 if do_clip:
@@ -501,8 +506,6 @@ class DeepInversionClass(object):
 
             if targets is not None:
                 targets = torch.from_numpy(np.array(targets).squeeze()).cuda()
-                if use_fp16:
-                    targets = targets.half()
 
             self.get_images(net_student=net_student, targets=targets)
 

@@ -180,8 +180,7 @@ def run(args):
     net = net.to(device)
 
     use_fp16 = args.fp16
-    if use_fp16:
-        net, _ = amp.initialize(net, [], opt_level="O2")
+
 
     print('==> Resuming from checkpoint..')
 
@@ -204,8 +203,6 @@ def run(args):
             net_verifier = models.__dict__[args.verifier_arch](pretrained=False).to(device)
             net_verifier.eval()
 
-            if use_fp16:
-                net_verifier = net_verifier.half()
 
     # since there is competiton among teacher and student
     # the verifier will be the actual student
@@ -251,16 +248,13 @@ def run(args):
         # net_verifier.fc = nn.Conv2d(in_channels=256, out_channels=16, kernel_size=1)
         # net_verifier.load_state_dict(checkpoint_ver_v2)
 
-        if use_fp16:
-            net_verifier, _ = amp.initialize(net_verifier, [], opt_level="O2")
-
         net_verifier = net_verifier.to(device)
         net_verifier.train()
 
-        if use_fp16:
+        """if use_fp16:
             for module in net_verifier.modules():
                 if isinstance(module, nn.BatchNorm2d):
-                    module.eval().half()
+                    module.eval().half()"""
 
     from deepinversion import DeepInversionClass
 
